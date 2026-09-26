@@ -5,6 +5,7 @@
 
 > 開発中です。取得・変換・タイル化・3D ビューワが動きます(東京 23 区周辺で検証中)。
 
+- デモ: <https://shiwaku.github.io/boring-data-converter/>(東京 23 区周辺、取得途中のデータ)
 - 検討メモ: [docs/design-memo.md](docs/design-memo.md)
 
 ## 構成
@@ -118,6 +119,8 @@ npm install
 npm run dev      # http://127.0.0.1:5176
 npm run build    # 型チェック → ../app/ へビルド
 ```
+
+`main` に `viewer/` の変更を push すると、GitHub Actions(`.github/workflows/deploy-pages.yml`)がビルドして GitHub Pages に公開します。
 
 | 機能 | 内容 |
 | --- | --- |
