@@ -20,6 +20,7 @@ import {
   type Layer,
   type ViewState,
 } from './borings'
+import { DPP_LAYER_ID, DPP_SOURCE_ID, dppLayer, dppPopupHtml, dppSourceSpec } from './dpp'
 import { DEM_HILLSHADE, DEM_TERRAIN, HILLSHADE_ID, demSourceSpec, hillshadeLayer } from './terrain'
 import { applyThemeAttr, initialTheme, type Theme } from './theme'
 import './style.css'
@@ -33,6 +34,7 @@ let base: Basemap = 'pale'
 applyThemeAttr(theme)
 
 // 陰影起伏と3D地形は最初からオンにする(地形と柱状図の関係を見るビューワなので)
+let dppOn = true
 let hillshadeOn = true
 let terrainOn = true
 let terrainExag = 1
@@ -136,7 +138,11 @@ function applyTerrain(): void {
 function applyBorings(): void {
   whenStyleReady(() => {
     removeLayer(POINT_LAYER_ID)
+    removeLayer(DPP_LAYER_ID)
+    if (!map.getSource(DPP_SOURCE_ID)) map.addSource(DPP_SOURCE_ID, dppSourceSpec())
     if (!map.getSource(SOURCE_ID)) map.addSource(SOURCE_ID, sourceSpec())
+    // 全国の位置(DPP)を下に、柱状図のある孔の点をその上に置く
+    map.addLayer(dppLayer(theme, dppOn), labelBeforeId())
     map.addLayer(pointLayer(theme, view.mode === 'under'), labelBeforeId())
     borings.refresh()
   })
@@ -268,6 +274,12 @@ function renderLegend(): void {
 
 // ---- 地形 ----
 
+const dppOnEl = el<HTMLInputElement>('dpp-on')
+dppOnEl.addEventListener('change', () => {
+  dppOn = dppOnEl.checked
+  if (map.getLayer(DPP_LAYER_ID)) map.setLayoutProperty(DPP_LAYER_ID, 'visibility', dppOn ? 'visible' : 'none')
+})
+
 const hillshadeOnEl = el<HTMLInputElement>('hillshade-on')
 hillshadeOnEl.addEventListener('change', () => { hillshadeOn = hillshadeOnEl.checked; applyHillshade() })
 
@@ -348,10 +360,19 @@ function popupHtml(hit: Layer): string {
 }
 
 const popup = new maplibregl.Popup({ closeButton: true, maxWidth: '340px' })
+// 円柱を優先し、無ければ全国の位置(DPP)の点を拾う
+const DPP_PICK_PX = 5
 map.on('click', (e) => {
   const hit = borings.pick(e.point.x, e.point.y)
-  if (!hit) return
-  popup.setLngLat([hit.lng, hit.lat]).setHTML(popupHtml(hit)).addTo(map)
+  if (hit) {
+    popup.setLngLat([hit.lng, hit.lat]).setHTML(popupHtml(hit)).addTo(map)
+    return
+  }
+  if (!dppOn || !map.getLayer(DPP_LAYER_ID)) return
+  const { x, y } = e.point
+  const f = map.queryRenderedFeatures([[x - DPP_PICK_PX, y - DPP_PICK_PX], [x + DPP_PICK_PX, y + DPP_PICK_PX]], { layers: [DPP_LAYER_ID] })[0]
+  if (!f || f.geometry.type !== 'Point') return
+  popup.setLngLat(f.geometry.coordinates as [number, number]).setHTML(dppPopupHtml(f.properties)).addTo(map)
 })
 if (window.matchMedia('(hover: hover)').matches) {
   map.on('mousemove', (e) => {
@@ -367,6 +388,7 @@ map.on('idle', () => {
 
 // ---- 初期化 ----
 
+dppOnEl.checked = dppOn
 hillshadeOnEl.checked = hillshadeOn
 terrainOnEl.checked = terrainOn
 terrainOptsEl.hidden = !terrainOn

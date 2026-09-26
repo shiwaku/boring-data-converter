@@ -109,6 +109,12 @@ export interface ViewState {
 export const ELEV_OFFSET_M = 80
 /** 層の境目に空ける隙間(表示上の m) */
 const GAP_M = 0.4
+/**
+ * 円柱にする土質層のキャッシュの上限。キャッシュは明滅を防ぐため消さない設計だが、
+ * 全国を触っているうちに増え続けるので、超えたら拾った順に古いものから捨てる
+ * (jma-earthquake-data-converter の震源の立体表示と同じ方針)。
+ */
+const MAX_LAYERS = 300_000
 /** 当たり判定を広げる(px) */
 const PICK_RADIUS = 4
 
@@ -153,7 +159,15 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
       if (!heads.has(d.boring_id)) heads.set(d.boring_id, { id: d.boring_id, lng, lat })
       added = true
     }
-    if (added) render()
+    if (!added) return
+    if (cache.size > MAX_LAYERS) {
+      let over = cache.size - MAX_LAYERS
+      for (const key of cache.keys()) {
+        cache.delete(key)
+        if (--over <= 0) break
+      }
+    }
+    render()
   }
 
   function schedule(): void {

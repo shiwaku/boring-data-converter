@@ -109,7 +109,19 @@ bash scripts/build_tiles.sh build/tokyo23 tokyo23
 タイル内のレイヤーは `layers`(土質層)、`spt`(標準貫入試験)、`borings`(孔口)で、ズームは 8〜14 です。
 
 - 1 本のボーリングは同じ座標に層の数だけ点が重なるため、間引くと柱の途中が欠けます。`-r1 --no-feature-limit --no-tile-size-limit` で間引きを止め、`--buffer=0` で隣のタイルへの重複を避けています。
-- 東京 23 区周辺 3,104 本(土質層 37,490、標準貫入試験 76,741)で、MVT 12.1 MB → MLT 5.1 MB。全ズームで地物数が入力と一致することを確認しています。
+- 東京 23 区周辺 3,104 本(土質層 37,490、標準貫入試験 76,741)で、MVT 7.9 MB → MLT 3.3 MB。全ズームで地物数が入力と一致することを確認しています。
+
+### 全国のボーリング位置(DPP)
+
+```sh
+python scripts/dpp_points.py                                                 # data/metadata_ngi.ndjson → build/dpp.points.ndjson
+bash scripts/build_points_tiles.sh build/dpp.points.ndjson japan-dpp-points  # → viewer/public/data/japan-dpp-points.mlt.pmtiles
+```
+
+DPP のメタデータ(262,284 件、47 都道府県)から孔口の点を作ります。XML は要りません。引いたズームでは密な所を間引き、ズーム 12 以上で全点を入れます(MLT 27.5 MB)。
+全国分のタイルはリポジトリに置かず、Cloudflare R2(`https://shi-works.com/pmtiles/boring-data-converter/`)から配信します。GitHub Pages のビルドでは `VITE_DPP_PMTILES_URL` で配信先を指定しています。
+
+KuniJiban のタイル(`build_tiles.sh`)も、引いたズームでは孔口の点だけを入れ、土質層・標準貫入試験はズーム 11 以上に入れます(「引いたら点、寄ったら層」)。
 
 ## ビューワ
 
@@ -128,6 +140,7 @@ npm run build    # 型チェック → ../app/ へビルド
 | 土質 | 大分類 9 区分の凡例。クリックで表示・非表示 |
 | ポップアップ | 円柱をクリックするとその孔の全層(深度・土質名)と、KuniJiban の柱状図 PDF へのリンク |
 | 地形 | [Mapterhorn](https://mapterhorn.com/) の陰影起伏と 3D 地形(起伏倍率可変、最初からオン)。3D 地形のときの「地下」表示は地形越しに透かして描く |
+| 全国の位置 | DPP の国土地盤情報データベース 262,284 件の点。クリックで孔口標高・掘進長・土質名の一覧 |
 | 背景地図 | 淡色 / 標準(地理院 最適化ベクトルタイル)/ 写真 / 白図、ライト / ダークテーマ |
 
 - タイルの取得は MapLibre の MLT ソース(`encoding: "mlt"`)に任せ、読み込まれた地物を `querySourceFeatures` で拾って deck.gl の `ColumnLayer` で円柱にします。MapLibre の MLT デコーダは z を捨てるため、深度・標高は属性で運んでいます([jma-earthquake-data-converter](https://github.com/shiwaku/jma-earthquake-data-converter) の震源の立体表示と同じ構成)。
