@@ -28,10 +28,10 @@ CLASSES = [
 ]
 
 _PRIORITY = [
-    ("topsoil", re.compile(r"表土")),
-    ("fill", re.compile(r"盛土|盛り土|埋土|埋戻|客土|改良土|砕石|舗装|アスファルト|コンクリート|廃棄物|瓦礫|ガラ")),
+    ("topsoil", re.compile(r"表土|表層")),
+    ("fill", re.compile(r"盛土|盛り土|埋土|埋戻|客土|改良土|覆土|砕石|舗装|アスファルト|コンクリ|廃棄物|瓦礫|ガラ")),
     ("rock", re.compile(r"岩")),
-    ("volcanic", re.compile(r"ローム|火山灰(?!混)|スコリア|軽石|浮石")),
+    ("volcanic", re.compile(r"ローム|黒ボク|火山灰(?!混)|スコリア|軽石|浮石")),
     ("organic", re.compile(r"腐植|泥炭|高有機質|^有機質(?!土混)|有機質土$")),
 ]
 
@@ -39,8 +39,8 @@ _PRIORITY = [
 _LAST_WORD = [
     ("gravel", re.compile(r"礫|玉石|転石|砂利")),
     ("sand", re.compile(r"砂|まさ土")),
-    ("silt", re.compile(r"シルト")),
-    ("clay", re.compile(r"粘土|粘性土|細粒土")),
+    ("silt", re.compile(r"シルト|しると|沈泥")),
+    ("clay", re.compile(r"粘土|粘性土|細粒土|軟泥|浮泥")),
 ]
 
 
