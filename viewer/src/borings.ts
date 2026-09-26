@@ -30,8 +30,12 @@ export function sourceSpec(): VectorSourceSpecification {
   } as VectorSourceSpecification
 }
 
-/** 孔口の点。平面で見たときの位置と、タイルを読み込ませるために常に置く */
-export function pointLayer(theme: 'light' | 'dark'): CircleLayerSpecification {
+/**
+ * 孔口の点。平面で見たときの位置と、タイルを読み込ませるために常に置く。
+ * 「地下」表示では deck.gl の輪が孔口を示すので、円が重ならないよう透明にする
+ * (visibility: none にするとタイルが読み込まれず円柱も消えるため、不透明度で消す)。
+ */
+export function pointLayer(theme: 'light' | 'dark', hidden = false): CircleLayerSpecification {
   return {
     id: POINT_LAYER_ID,
     type: 'circle',
@@ -42,7 +46,8 @@ export function pointLayer(theme: 'light' | 'dark'): CircleLayerSpecification {
       'circle-color': theme === 'dark' ? '#f2f4f7' : '#14161a',
       'circle-stroke-color': theme === 'dark' ? '#14161a' : '#ffffff',
       'circle-stroke-width': 1,
-      'circle-opacity': 0.8,
+      'circle-opacity': hidden ? 0 : 0.8,
+      'circle-stroke-opacity': hidden ? 0 : 1,
     },
   }
 }
@@ -96,6 +101,8 @@ export interface ViewState {
   hidden: Set<number>
   /** 3D地形の起伏倍率。地形がオフなら null */
   terrainExag: number | null
+  /** 孔口の輪の色をテーマで切り替える */
+  theme: 'light' | 'dark'
 }
 
 /** 「標高をそろえる」で地面(高さ 0)に置く標高 [m] */
@@ -175,30 +182,30 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
   }
 
   /**
-   * 「地下」表示で地表の位置を示す輪。円柱を地形越しに透かして描くと、斜めから見たときに
-   * 地上に立っているように見え、地面との境目が分からなくなるため。
-   * 明るい背景でも暗い背景でも見えるよう、黒の輪の内側に白の輪を重ねる。
+   * 「地下」表示で地表の位置を示す輪(円柱 1 本に 1 つ)。円柱を地形越しに透かして描くと、
+   * 斜めから見たときに地上に立っているように見え、地面との境目が分からなくなるため。
+   * 色はテーマで切り替え、淡色地図では濃い色、ダークでは白にする。
    */
   function ringLayers(xray: boolean): ScatterplotLayer[] {
     if (view.mode !== 'under') return []
-    const heads_ = [...heads.values()]
-    const ring = (id: string, color: [number, number, number, number], scale: number, width: number) =>
+    const color: [number, number, number, number] = view.theme === 'dark' ? [255, 255, 255, 230] : [20, 22, 26, 220]
+    return [
       new ScatterplotLayer<{ id: string; lng: number; lat: number }>({
-        id,
-        data: heads_,
+        id: 'boring-rings',
+        data: [...heads.values()],
         // 地形の起伏と孔口標高がずれると輪が地面に埋もれるので、透かし表示のときは深度テストを外す
         parameters: { depthCompare: xray ? 'always' : 'less-equal' },
         getPosition: (h) => [h.lng, h.lat, groundZ(h.id) + 0.5],
-        getRadius: view.radius * scale,
+        getRadius: view.radius * 1.7,
         filled: false,
         stroked: true,
         billboard: false,
         getLineColor: color,
         lineWidthUnits: 'pixels',
-        getLineWidth: width,
-        updateTriggers: { getPosition: [view.terrainExag], getRadius: [view.radius] },
-      })
-    return [ring('boring-rings-dark', [20, 22, 26, 220], 1.7, 3), ring('boring-rings-light', [255, 255, 255, 240], 1.7, 1.5)]
+        getLineWidth: 2,
+        updateTriggers: { getPosition: [view.terrainExag], getRadius: [view.radius], getLineColor: [view.theme] },
+      }),
+    ]
   }
 
   function render(): void {
