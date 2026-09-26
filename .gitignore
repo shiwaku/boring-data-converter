@@ -15,3 +15,5 @@ __pycache__/
 # ビューワ
 viewer/node_modules/
 /app/
+# 全国分のタイルは R2 から配信する(GitHub は 1 ファイル 100 MB まで。#18)
+/viewer/public/data/japan-*.pmtiles

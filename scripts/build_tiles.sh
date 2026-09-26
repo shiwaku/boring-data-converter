@@ -8,6 +8,8 @@
 #   build/<name>.mvt.pmtiles              MVT(tippecanoe。MLT の変換元・比較用)
 #   viewer/public/data/<name>.mlt.pmtiles MLT(mlt convert、tile_type = mlt。ビューワが読む)
 # タイル内のレイヤー名は layers / spt / borings。
+# 引いたズームでは孔口の点(borings)だけを入れ、土質層・標準貫入試験はズーム LAYER_MINZOOM 以上に入れる
+# (「引いたら点、寄ったら層」。全国に広げたときに広域のタイルが巨大にならないようにするため)。
 #
 # 必要なもの: tippecanoe 2.17 以降、mlt CLI(cargo install mlt)。Linux / macOS / WSL で実行する。
 
@@ -15,7 +17,8 @@ set -euo pipefail
 
 PREFIX=${1:?usage: build_tiles.sh PREFIX NAME}
 NAME=${2:?usage: build_tiles.sh PREFIX NAME}
-MINZOOM=${MINZOOM:-8}
+MINZOOM=${MINZOOM:-4}
+LAYER_MINZOOM=${LAYER_MINZOOM:-11}
 MAXZOOM=${MAXZOOM:-14}
 
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -42,6 +45,7 @@ TIPPE_OPTS=(
   -Z"$MINZOOM" -z"$MAXZOOM"
   -r1 --no-feature-limit --no-tile-size-limit --buffer=0
   --generate-ids
+  -j "{\"layers\": [\">=\", \"\$zoom\", $LAYER_MINZOOM], \"spt\": [\">=\", \"\$zoom\", $LAYER_MINZOOM]}"
   -P
 )
 for a in "${INT_ATTRS[@]}"; do TIPPE_OPTS+=(--attribute-type="$a":int); done

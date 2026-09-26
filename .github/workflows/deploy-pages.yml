@@ -38,6 +38,9 @@ jobs:
       - name: ビルド
         working-directory: viewer
         run: npm run build
+        env:
+          # 全国のボーリング位置(DPP)のタイルは R2 から配信する(#18)
+          VITE_DPP_PMTILES_URL: https://shi-works.com/pmtiles/boring-data-converter/japan-dpp-points.mlt.pmtiles
 
       - uses: actions/configure-pages@v5
 
