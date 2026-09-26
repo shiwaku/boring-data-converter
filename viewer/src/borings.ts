@@ -1,5 +1,5 @@
 import { MapboxOverlay } from '@deck.gl/mapbox'
-import { ColumnLayer } from '@deck.gl/layers'
+import { ColumnLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecification } from 'maplibre-gl'
 
 /**
@@ -125,6 +125,8 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
   // 孔ごとの最深部と孔口標高(層の属性から求める)
   const maxDepth = new Map<string, number>()
   const collar = new Map<string, number>()
+  // 孔口の位置(「地下」表示で地表の目印の輪を描くため)
+  const heads = new Map<string, { id: string; lng: number; lat: number }>()
   let pending = false
 
   function collect(): void {
@@ -141,6 +143,7 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
       cache.set(key, d)
       maxDepth.set(d.boring_id, Math.max(maxDepth.get(d.boring_id) ?? 0, d.bottom_depth_cm))
       if (d.top_elev_cm != null) collar.set(d.boring_id, d.top_elev_cm + d.top_depth_cm)
+      if (!heads.has(d.boring_id)) heads.set(d.boring_id, { id: d.boring_id, lng, lat })
       added = true
     }
     if (added) render()
@@ -152,9 +155,14 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
     requestAnimationFrame(collect)
   }
 
+  /** 孔口(地表)の表示高さ [m]。3D地形があれば孔口標高 × 起伏倍率、無ければ 0 */
+  function groundZ(boringId: string): number {
+    return view.terrainExag != null ? ((collar.get(boringId) ?? 0) / 100) * view.terrainExag : 0
+  }
+
   /** 層の下端の表示高さ [m]。null なら描かない */
   function baseZ(d: Layer): number | null {
-    const ground = view.terrainExag != null ? ((collar.get(d.boring_id) ?? 0) / 100) * view.terrainExag : 0
+    const ground = groundZ(d.boring_id)
     if (view.mode === 'under') {
       // 地下に表示: 孔口を地面に置き、実際の深さで下へ伸ばす
       return ground - (d.bottom_depth_cm / 100) * view.exag
@@ -164,6 +172,33 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
     }
     // 各孔の地表をそろえる: 最深部を地面に置いて上に積む。3D地形があれば孔口標高の地面に立てる
     return ground + ((maxDepth.get(d.boring_id)! - d.bottom_depth_cm) / 100) * view.exag
+  }
+
+  /**
+   * 「地下」表示で地表の位置を示す輪。円柱を地形越しに透かして描くと、斜めから見たときに
+   * 地上に立っているように見え、地面との境目が分からなくなるため。
+   * 明るい背景でも暗い背景でも見えるよう、黒の輪の内側に白の輪を重ねる。
+   */
+  function ringLayers(xray: boolean): ScatterplotLayer[] {
+    if (view.mode !== 'under') return []
+    const heads_ = [...heads.values()]
+    const ring = (id: string, color: [number, number, number, number], scale: number, width: number) =>
+      new ScatterplotLayer<{ id: string; lng: number; lat: number }>({
+        id,
+        data: heads_,
+        // 地形の起伏と孔口標高がずれると輪が地面に埋もれるので、透かし表示のときは深度テストを外す
+        parameters: { depthCompare: xray ? 'always' : 'less-equal' },
+        getPosition: (h) => [h.lng, h.lat, groundZ(h.id) + 0.5],
+        getRadius: view.radius * scale,
+        filled: false,
+        stroked: true,
+        billboard: false,
+        getLineColor: color,
+        lineWidthUnits: 'pixels',
+        getLineWidth: width,
+        updateTriggers: { getPosition: [view.terrainExag], getRadius: [view.radius] },
+      })
+    return [ring('boring-rings-dark', [20, 22, 26, 220], 1.7, 3), ring('boring-rings-light', [255, 255, 255, 240], 1.7, 1.5)]
   }
 
   function render(): void {
@@ -184,6 +219,8 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
           // 3D地形は深度を書き込むため、地下の円柱は地面に隠れる。「地下」表示のときだけ
           // 深度テストを外して地形越しに透かして見せる(円柱どうしの前後関係は不正確になる)
           parameters: { depthCompare: xray ? 'always' : 'less-equal' },
+          // 透かして見ている(地面の下にある)ことが分かるよう、少し薄くする
+          opacity: xray ? 0.7 : 1,
           getPosition: (d) => [d.lng, d.lat, baseZ(d)!],
           getElevation: (d) => Math.max((d.thickness_cm / 100) * view.exag - GAP_M, 0.1),
           getFillColor: (d) => RGB[d.cls],
@@ -192,6 +229,7 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
             getElevation: [view.exag],
           },
         }),
+        ...ringLayers(xray),
       ],
     })
   }
