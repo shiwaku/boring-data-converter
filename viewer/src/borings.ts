@@ -1,0 +1,216 @@
+import { MapboxOverlay } from '@deck.gl/mapbox'
+import { ColumnLayer } from '@deck.gl/layers'
+import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecification } from 'maplibre-gl'
+
+/**
+ * ボーリングの土質層を 3D の円柱で表示する。
+ *
+ * タイルは MLT(boring-convert → tippecanoe → mlt convert)。MLT の仕様は 3D 座標に
+ * 対応しているが、MapLibre のデコーダは z を捨てるため、深度・標高は整数 cm の属性で運び、
+ * 円柱の高さの組み立ては deck.gl 側で行う(shiwaku/jma-earthquake-data-converter の
+ * 震源の立体表示と同じ構成)。
+ *
+ * タイルの取得は MapLibre の MLT ソースに任せ、読み込まれた地物を querySourceFeatures で
+ * 拾って円柱にする。ソースは孔口の点(borings レイヤー)の表示にも使うので取得は 1 系統。
+ */
+
+export const SOURCE_ID = 'borings'
+export const POINT_LAYER_ID = 'boring-points'
+
+const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
+  || new URL(`${import.meta.env.BASE_URL}data/tokyo23.mlt.pmtiles`, location.href).href
+
+export function sourceSpec(): VectorSourceSpecification {
+  return {
+    type: 'vector',
+    url: `pmtiles://${PMTILES_URL}`,
+    encoding: 'mlt',
+    attribution:
+      '<a href="https://www.kunijiban.pwri.go.jp/" target="_blank" rel="noopener">国土地盤情報検索サイト KuniJiban</a>',
+  } as VectorSourceSpecification
+}
+
+/** 孔口の点。平面で見たときの位置と、タイルを読み込ませるために常に置く */
+export function pointLayer(theme: 'light' | 'dark'): CircleLayerSpecification {
+  return {
+    id: POINT_LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    'source-layer': 'borings',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 14, 4],
+      'circle-color': theme === 'dark' ? '#f2f4f7' : '#14161a',
+      'circle-stroke-color': theme === 'dark' ? '#14161a' : '#ffffff',
+      'circle-stroke-width': 1,
+      'circle-opacity': 0.8,
+    },
+  }
+}
+
+/**
+ * 土質の大分類(boring_converter/soil.py の soil_class)と色。
+ * 6 色は色覚の違いを含めて全ペアで検証済み。表土・盛土、岩、不明は明度の違う無彩色。
+ * 色だけに頼らないよう、層の境目に隙間を空け、クリックで土質名を出す。
+ */
+export const CLASSES = [
+  { codes: ['topsoil', 'fill'], label: '表土・盛土', color: '#a3a3a3' },
+  { codes: ['organic'], label: '有機質土', color: '#008300' },
+  { codes: ['volcanic'], label: '火山灰質土(ローム)', color: '#e34948' },
+  { codes: ['clay'], label: '粘性土', color: '#2a78d6' },
+  { codes: ['silt'], label: 'シルト', color: '#1baf7a' },
+  { codes: ['sand'], label: '砂', color: '#eda100' },
+  { codes: ['gravel'], label: '礫', color: '#4a3aa7' },
+  { codes: ['rock'], label: '岩', color: '#4d4d4d' },
+  { codes: ['unknown'], label: '不明', color: '#dcdcdc' },
+] as const
+
+const CLASS_INDEX: Record<string, number> = {}
+CLASSES.forEach((c, i) => c.codes.forEach((code) => { CLASS_INDEX[code] = i }))
+const UNKNOWN = CLASS_INDEX.unknown
+const RGB = CLASSES.map((c) => [1, 3, 5].map((i) => parseInt(c.color.slice(i, i + 2), 16)) as [number, number, number])
+
+/** 土質層 1 層。タイルの属性をそのまま持つ(深度・標高は cm) */
+export interface Layer {
+  key: string
+  lng: number
+  lat: number
+  boring_id: string
+  layer_index: number
+  top_depth_cm: number
+  bottom_depth_cm: number
+  thickness_cm: number
+  top_elev_cm?: number
+  bottom_elev_cm?: number
+  soil_name?: string
+  soil_class: string
+  color_name?: string
+  cls: number
+}
+
+export type HeightMode = 'under' | 'elev' | 'depth'
+
+export interface ViewState {
+  mode: HeightMode
+  exag: number
+  radius: number
+  hidden: Set<number>
+  /** 3D地形の起伏倍率。地形がオフなら null */
+  terrainExag: number | null
+}
+
+/** 「標高をそろえる」で地面(高さ 0)に置く標高 [m] */
+export const ELEV_OFFSET_M = 80
+/** 層の境目に空ける隙間(表示上の m) */
+const GAP_M = 0.4
+/** 当たり判定を広げる(px) */
+const PICK_RADIUS = 4
+
+export interface BoringOverlay {
+  render(): void
+  /** 背景・テーマの切替や地形の切替のあとに地物を拾い直す */
+  refresh(): void
+  pick(x: number, y: number): Layer | null
+  /** 同じボーリングの層(上から順) */
+  column(boringId: string): Layer[]
+  count(): { borings: number; layers: number }
+}
+
+export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOverlay {
+  const overlay = new MapboxOverlay({ interleaved: true, layers: [] })
+  map.addControl(overlay)
+
+  // querySourceFeatures が返す集合はタイルの出入りで変わる。加算キャッシュにして
+  // 消さないことで、カメラを動かしたときに円柱が明滅しないようにする。
+  const cache = new Map<string, Layer>()
+  // 孔ごとの最深部と孔口標高(層の属性から求める)
+  const maxDepth = new Map<string, number>()
+  const collar = new Map<string, number>()
+  let pending = false
+
+  function collect(): void {
+    pending = false
+    if (!map.getSource(SOURCE_ID)) return
+    let added = false
+    for (const f of map.querySourceFeatures(SOURCE_ID, { sourceLayer: 'layers' })) {
+      const p = f.properties as Record<string, unknown>
+      const key = `${p.boring_id}|${p.layer_index}`
+      if (cache.has(key) || f.geometry.type !== 'Point') continue
+      const [lng, lat] = f.geometry.coordinates as [number, number]
+      const d = { ...p, key, lng, lat, boring_id: String(p.boring_id),
+        cls: CLASS_INDEX[p.soil_class as string] ?? UNKNOWN } as Layer
+      cache.set(key, d)
+      maxDepth.set(d.boring_id, Math.max(maxDepth.get(d.boring_id) ?? 0, d.bottom_depth_cm))
+      if (d.top_elev_cm != null) collar.set(d.boring_id, d.top_elev_cm + d.top_depth_cm)
+      added = true
+    }
+    if (added) render()
+  }
+
+  function schedule(): void {
+    if (pending) return
+    pending = true
+    requestAnimationFrame(collect)
+  }
+
+  /** 層の下端の表示高さ [m]。null なら描かない */
+  function baseZ(d: Layer): number | null {
+    const ground = view.terrainExag != null ? ((collar.get(d.boring_id) ?? 0) / 100) * view.terrainExag : 0
+    if (view.mode === 'under') {
+      // 地下に表示: 孔口を地面に置き、実際の深さで下へ伸ばす
+      return ground - (d.bottom_depth_cm / 100) * view.exag
+    }
+    if (view.mode === 'elev') {
+      return d.bottom_elev_cm == null ? null : (d.bottom_elev_cm / 100 + ELEV_OFFSET_M) * view.exag
+    }
+    // 各孔の地表をそろえる: 最深部を地面に置いて上に積む。3D地形があれば孔口標高の地面に立てる
+    return ground + ((maxDepth.get(d.boring_id)! - d.bottom_depth_cm) / 100) * view.exag
+  }
+
+  function render(): void {
+    const xray = view.mode === 'under' && view.terrainExag != null
+    const data = [...cache.values()].filter((d) => !view.hidden.has(d.cls) && baseZ(d) != null)
+    overlay.setProps({
+      layers: [
+        new ColumnLayer<Layer>({
+          id: 'boring-columns',
+          data,
+          diskResolution: 16,
+          radius: view.radius,
+          extruded: true,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 150],
+          elevationScale: 1,
+          // 3D地形は深度を書き込むため、地下の円柱は地面に隠れる。「地下」表示のときだけ
+          // 深度テストを外して地形越しに透かして見せる(円柱どうしの前後関係は不正確になる)
+          parameters: { depthCompare: xray ? 'always' : 'less-equal' },
+          getPosition: (d) => [d.lng, d.lat, baseZ(d)!],
+          getElevation: (d) => Math.max((d.thickness_cm / 100) * view.exag - GAP_M, 0.1),
+          getFillColor: (d) => RGB[d.cls],
+          updateTriggers: {
+            getPosition: [view.mode, view.exag, view.terrainExag],
+            getElevation: [view.exag],
+          },
+        }),
+      ],
+    })
+  }
+
+  map.on('sourcedata', (e) => {
+    if (e.sourceId === SOURCE_ID && e.sourceDataType !== 'metadata') schedule()
+  })
+  map.on('moveend', schedule)
+
+  return {
+    render,
+    refresh: () => map.once('idle', schedule),
+    pick(x, y) {
+      const info = overlay.pickObject({ x, y, radius: PICK_RADIUS })
+      return (info?.object as Layer | undefined) ?? null
+    },
+    column(boringId) {
+      return [...cache.values()].filter((d) => d.boring_id === boringId).sort((a, b) => a.layer_index - b.layer_index)
+    },
+    count: () => ({ borings: maxDepth.size, layers: cache.size }),
+  }
+}

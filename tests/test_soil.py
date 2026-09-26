@@ -1,0 +1,32 @@
+import pytest
+
+from boring_converter.soil import classify
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("砂質シルト", "silt"),
+    ("シルト質砂", "sand"),
+    ("砂混りシルト", "silt"),
+    ("砂礫", "gravel"),
+    ("砂利・礫混り砂", "sand"),
+    ("砂利", "gravel"),
+    ("粘土質シルト", "silt"),
+    ("砂質粘性土", "clay"),
+    ("盛土(砂質シルト)", "fill"),
+    ("砂質盛土", "fill"),
+    ("表土(ガラ、粘土混じり砂)", "topsoil"),
+    ("砂質泥岩", "rock"),
+    ("軟岩・風化岩", "rock"),
+    ("ロ－ム", "volcanic"),
+    ("火山灰質粘性土", "volcanic"),
+    ("火山灰混り砂", "sand"),
+    ("高有機質土(腐植土)", "organic"),
+    ("有機質シルト", "organic"),
+    ("有機質土混り砂", "sand"),
+    ("シルト(Ｍ)", "silt"),
+    ("細～中砂", "sand"),
+    (None, "unknown"),
+    ("", "unknown"),
+])
+def test_classify(name, expected):
+    assert classify(name) == expected

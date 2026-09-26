@@ -1,0 +1,17 @@
+# APIキー
+.env
+apikey.txt
+
+# 取得データ・中間生成物(再配布前の元データは入れない)
+/data/
+/explore/
+/build/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+
+# ビューワ
+viewer/node_modules/
+/app/
