@@ -33,9 +33,9 @@ export function dppLayer(theme: 'light' | 'dark', visible: boolean): CircleLayer
     'source-layer': 'dpp',
     layout: { visibility: visible ? 'visible' : 'none' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 2, 14, 3.5],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 10, 2.5, 14, 3.5],
       'circle-color': theme === 'dark' ? '#8fb8ff' : '#2a5db0',
-      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 12, 0.8],
+      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.75, 12, 0.9],
       'circle-stroke-color': theme === 'dark' ? '#14161a' : '#ffffff',
       'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 0, 12, 0.8],
     },
@@ -54,7 +54,8 @@ export function dppPopupHtml(p: Record<string, unknown>): string {
     ['掘進長', `${m(p.length_cm)} m`],
     ['孔内水位', p.water_level_cm != null ? `${m(p.water_level_cm)} m` : '–'],
     ['土質', esc(p.soil_names)],
-    ['年', esc(p.year)],
+    // DPF:year は DPP への登録年で、調査年ではない(例: 昭和63年度の調査が 2018)
+    ['DPP 登録年', esc(p.year)],
     ['都道府県', esc(p.prefecture)],
   ].filter(([, v]) => v && v !== 'T.P. – m' && v !== '– m')
   return `<div class="pop">
