@@ -37,7 +37,7 @@ let hillshadeOn = true
 let terrainOn = true
 let terrainExag = 1
 
-const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: 1 }
+const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: 1, theme }
 
 const isMobile = window.matchMedia('(max-width: 640px)').matches
 
@@ -137,7 +137,7 @@ function applyBorings(): void {
   whenStyleReady(() => {
     removeLayer(POINT_LAYER_ID)
     if (!map.getSource(SOURCE_ID)) map.addSource(SOURCE_ID, sourceSpec())
-    map.addLayer(pointLayer(theme), labelBeforeId())
+    map.addLayer(pointLayer(theme, view.mode === 'under'), labelBeforeId())
     borings.refresh()
   })
 }
@@ -165,6 +165,7 @@ const renderThemeBtn = (): void => {
 }
 themeBtn.addEventListener('click', () => {
   theme = theme === 'dark' ? 'light' : 'dark'
+  view.theme = theme
   applyThemeAttr(theme)
   renderThemeBtn()
   void reloadStyle()
@@ -212,6 +213,7 @@ function renderHeightModes(): void {
         if (view.mode === key) return
         view.mode = key
         renderHeightModes()
+        applyBorings()
         borings.render()
       })
       return btn
