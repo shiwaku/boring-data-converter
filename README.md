@@ -127,7 +127,7 @@ npm run build    # 型チェック → ../app/ へビルド
 | 柱状図 | 土質層ごとに色分けした円柱。**地下**(孔口を地面に置き実深度で下へ)/ **標高で比較**(T.P. で高さをそろえる)/ **地上に立てる** を切り替え。鉛直強調・半径を可変 |
 | 土質 | 大分類 9 区分の凡例。クリックで表示・非表示 |
 | ポップアップ | 円柱をクリックするとその孔の全層(深度・土質名)と、KuniJiban の柱状図 PDF へのリンク |
-| 地形 | [Mapterhorn](https://mapterhorn.com/) の陰影起伏と 3D 地形(起伏倍率可変)。3D 地形のときの「地下」表示は地形越しに透かして描く |
+| 地形 | [Mapterhorn](https://mapterhorn.com/) の陰影起伏と 3D 地形(起伏倍率可変、最初からオン)。3D 地形のときの「地下」表示は地形越しに透かして描く |
 | 背景地図 | 淡色 / 標準(地理院 最適化ベクトルタイル)/ 写真 / 白図、ライト / ダークテーマ |
 
 - タイルの取得は MapLibre の MLT ソース(`encoding: "mlt"`)に任せ、読み込まれた地物を `querySourceFeatures` で拾って deck.gl の `ColumnLayer` で円柱にします。MapLibre の MLT デコーダは z を捨てるため、深度・標高は属性で運んでいます([jma-earthquake-data-converter](https://github.com/shiwaku/jma-earthquake-data-converter) の震源の立体表示と同じ構成)。

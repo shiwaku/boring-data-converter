@@ -32,11 +32,12 @@ let theme: Theme = initialTheme()
 let base: Basemap = 'pale'
 applyThemeAttr(theme)
 
-let hillshadeOn = false
-let terrainOn = false
+// 陰影起伏と3D地形は最初からオンにする(地形と柱状図の関係を見るビューワなので)
+let hillshadeOn = true
+let terrainOn = true
 let terrainExag = 1
 
-const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: null }
+const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: 1 }
 
 const isMobile = window.matchMedia('(max-width: 640px)').matches
 
@@ -364,6 +365,9 @@ map.on('idle', () => {
 
 // ---- 初期化 ----
 
+hillshadeOnEl.checked = hillshadeOn
+terrainOnEl.checked = terrainOn
+terrainOptsEl.hidden = !terrainOn
 renderThemeBtn()
 renderHeightModes()
 renderLegend()
