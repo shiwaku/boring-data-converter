@@ -53,6 +53,8 @@ tippecanoe -o "$BUILD/$NAME.mvt.pmtiles" "${TIPPE_OPTS[@]}" \
   -L borings:"$PREFIX.borings.ndjson"
 
 echo "== 2/2 mlt convert -> $DIST/$NAME.mlt.pmtiles"
+# mlt convert は既存の出力に追記しようとして止まるので、先に消す
+rm -f "$DIST/$NAME.mlt.pmtiles"
 mlt convert --tile-compression gzip "$BUILD/$NAME.mvt.pmtiles" "$DIST/$NAME.mlt.pmtiles"
 
 ls -l "$BUILD/$NAME.mvt.pmtiles" "$DIST/$NAME.mlt.pmtiles"
