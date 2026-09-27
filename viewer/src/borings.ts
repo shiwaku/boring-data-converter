@@ -16,6 +16,12 @@ import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecific
 
 export const SOURCE_ID = 'borings'
 export const POINT_LAYER_ID = 'boring-points'
+/**
+ * 地表の半透明の膜(MapLibre の fill レイヤー)。「地下に埋める」で円柱をこの下に差し込み、
+ * 膜越しに見せる。地面より手前に描かれていると地上にあるように見える錯覚を減らすため(#4)。
+ * 孔口の点・地図の注記・孔口の輪は膜の上に描き、そこが地面であることを示す。
+ */
+export const VEIL_LAYER_ID = 'ground-veil'
 
 export const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
   || new URL(`${import.meta.env.BASE_URL}data/japan.mlt.pmtiles`, location.href).href
@@ -224,6 +230,9 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
       layers: [
         new ColumnLayer<Layer>({
           id: 'boring-columns',
+          // 「地下に埋める」では地表の膜の下に差し込む(膜越しに見える)。beforeId は
+          // MapboxOverlay(interleaved)が読む設定で、ColumnLayer の型定義には無い
+          ...({ beforeId: view.mode === 'under' ? VEIL_LAYER_ID : undefined } as object),
           data,
           diskResolution: 16,
           radius: view.radius,

@@ -13,6 +13,7 @@ import {
   PMTILES_URL,
   POINT_LAYER_ID,
   SOURCE_ID,
+  VEIL_LAYER_ID,
   createBoringOverlay,
   pointLayer,
   sourceSpec,
@@ -135,10 +136,28 @@ function applyTerrain(): void {
   })
 }
 
+/** 地表の膜の不透明度。濃いほど地下らしく見えるが、背景地図も見えにくくなる */
+const VEIL_OPACITY = 0.45
+
 function applyBorings(): void {
   whenStyleReady(() => {
     removeLayer(POINT_LAYER_ID)
     removeLayer(DPP_LAYER_ID)
+    removeLayer(VEIL_LAYER_ID)
+    if (!map.getSource(VEIL_LAYER_ID)) {
+      map.addSource(VEIL_LAYER_ID, {
+        type: 'geojson',
+        data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
+      })
+    }
+    // 膜を先に置き、孔口の点はその上(注記の手前)に重ねる
+    map.addLayer({
+      id: VEIL_LAYER_ID,
+      type: 'fill',
+      source: VEIL_LAYER_ID,
+      layout: { visibility: view.mode === 'under' ? 'visible' : 'none' },
+      paint: { 'fill-color': theme === 'dark' ? '#14161a' : '#ffffff', 'fill-opacity': VEIL_OPACITY },
+    }, labelBeforeId())
     if (!map.getSource(DPP_SOURCE_ID)) map.addSource(DPP_SOURCE_ID, dppSourceSpec())
     if (!map.getSource(SOURCE_ID)) map.addSource(SOURCE_ID, sourceSpec())
     // 全国の位置(DPP)を下に、柱状図のある孔の点をその上に置く
