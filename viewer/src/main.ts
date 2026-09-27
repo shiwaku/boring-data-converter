@@ -39,7 +39,7 @@ let hillshadeOn = true
 let terrainOn = true
 let terrainExag = 1
 
-const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: 1, theme }
+const view: ViewState = { mode: 'under', exag: 5, radius: 12, hidden: new Set(), terrainExag: 1, theme, veil: 0.5 }
 
 const isMobile = window.matchMedia('(max-width: 640px)').matches
 
@@ -214,6 +214,7 @@ function renderHeightModes(): void {
         if (view.mode === key) return
         view.mode = key
         renderHeightModes()
+        veilRowEl.hidden = view.mode !== 'under'
         applyBorings()
         borings.render()
       })
@@ -234,6 +235,8 @@ function slider(id: string, fmt: (v: number) => string, onInput: (v: number) => 
 }
 slider('exag', (v) => `${v}倍`, (v) => { view.exag = v; borings.render() })
 slider('radius', (v) => `${v}m`, (v) => { view.radius = v; borings.render() })
+slider('veil', (v) => `${Math.round(v * 100)}%`, (v) => { view.veil = v; borings.render() })
+const veilRowEl = el('veil-row')
 
 // ---- 凡例(クリックで表示切替) ----
 

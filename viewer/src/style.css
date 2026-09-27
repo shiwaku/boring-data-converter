@@ -960,3 +960,8 @@ body {
 .count-note {
   margin: 0 0 8px;
 }
+
+/* hidden 属性でスライダーの行を隠す(.slider-row の display: flex に負けないように) */
+.slider-row[hidden] {
+  display: none;
+}
