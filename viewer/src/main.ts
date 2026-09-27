@@ -10,7 +10,6 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { BASEMAPS, getBasemapStyle, type Basemap } from './basemap'
 import {
   CLASSES,
-  ELEV_OFFSET_M,
   PMTILES_URL,
   POINT_LAYER_ID,
   SOURCE_ID,
@@ -193,18 +192,13 @@ collapseBtn.addEventListener('click', () => {
 const HEIGHT_MODES: { key: HeightMode; label: string; note: string }[] = [
   {
     key: 'under',
-    label: '地下',
-    note: '孔口を地面に置き、実際の深さのとおり地下へ伸ばす。地図を透かして見る表示で、前後関係は正確でない。',
-  },
-  {
-    key: 'elev',
-    label: '標高で比較',
-    note: `T.P.(東京湾平均海面)で高さをそろえる。孔どうしで同じ地層の高さを見比べられる。T.P. −${ELEV_OFFSET_M} m を地面の高さにしている。`,
+    label: '地下に埋める',
+    note: '孔口を地面に置き、実際の深さのとおり地下へ伸ばす。3D地形のときは地形越しに透かして描く。孔口の輪が地表の位置。',
   },
   {
     key: 'depth',
     label: '地上に立てる',
-    note: '各孔の最深部を地面に置き、地表を上にして積む。孔口標高の無い孔も表示できる。',
+    note: '各孔の最深部を地面に置き、地表を上にして積む。地形に隠れずに柱状図を見比べられる。',
   },
 ]
 const heightModesEl = el('height-modes')
