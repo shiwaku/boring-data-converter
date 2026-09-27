@@ -1,5 +1,5 @@
 import { MapboxOverlay } from '@deck.gl/mapbox'
-import { ColumnLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { ColumnLayer, ScatterplotLayer, SolidPolygonLayer } from '@deck.gl/layers'
 import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecification } from 'maplibre-gl'
 
 /**
@@ -17,11 +17,10 @@ import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecific
 export const SOURCE_ID = 'borings'
 export const POINT_LAYER_ID = 'boring-points'
 /**
- * 地表の半透明の膜(MapLibre の fill レイヤー)。「地下に埋める」で円柱をこの下に差し込み、
- * 膜越しに見せる。地面より手前に描かれていると地上にあるように見える錯覚を減らすため(#4)。
- * 孔口の点・地図の注記・孔口の輪は膜の上に描き、そこが地面であることを示す。
+ * 円柱と地表の膜は、この MapLibre レイヤー(全国の位置の点)の手前に差し込む。
+ * 孔口の点・地図の注記は膜の上、孔口の輪(deck.gl の最前面)はさらにその上になる。
  */
-export const VEIL_LAYER_ID = 'ground-veil'
+export const INSERT_BEFORE_ID = 'dpp-points'
 
 export const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
   || new URL(`${import.meta.env.BASE_URL}data/japan.mlt.pmtiles`, location.href).href
@@ -109,6 +108,11 @@ export interface ViewState {
   terrainExag: number | null
   /** 孔口の輪の色をテーマで切り替える */
   theme: 'light' | 'dark'
+  /**
+   * 「地下に埋める」で地表にかぶせる膜の不透明度(0〜0.8)。濃いほど地下らしく見えるが、
+   * 土質の色と背景地図が見えにくくなるので、使う人が選べるようにする
+   */
+  veil: number
 }
 
 /** 層の境目に空ける隙間(表示上の m) */
@@ -223,6 +227,31 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
     ]
   }
 
+  /**
+   * 地表の半透明の膜(「地下に埋める」のときだけ)。円柱を描いたあとに画面を覆い、地下の円柱を
+   * 膜越しに見せる。地面より手前に描かれていると地上にあるように見える錯覚を減らすため(#4)。
+   * MapLibre の fill レイヤーで作ると、3D地形では地形に貼るテクスチャに描かれて円柱との
+   * 前後が守られないため、deck.gl で円柱の直後に描く。
+   */
+  function veilLayers(): SolidPolygonLayer[] {
+    if (view.mode !== 'under' || view.veil <= 0) return []
+    const alpha = Math.round(view.veil * 255)
+    const color: [number, number, number, number] = view.theme === 'dark' ? [20, 22, 26, alpha] : [255, 255, 255, alpha]
+    return [
+      new SolidPolygonLayer<{ polygon: [number, number][] }>({
+        id: 'ground-veil',
+        ...({ beforeId: INSERT_BEFORE_ID } as object),
+        // 経度 ±180 をまたぐ世界全体の多角形は deck.gl で描かれないため、日本の周りだけを覆う
+        data: [{ polygon: [[110, 15], [160, 15], [160, 50], [110, 50]] }],
+        getPolygon: (d) => d.polygon,
+        getFillColor: color,
+        // 奥行きに関係なく上から重ね、深度は書かない(孔口の輪などの判定を邪魔しない)
+        parameters: { depthCompare: 'always', depthWriteEnabled: false },
+        updateTriggers: { getFillColor: [view.theme, view.veil] },
+      }),
+    ]
+  }
+
   function render(): void {
     const xray = view.mode === 'under' && view.terrainExag != null
     const data = [...cache.values()].filter((d) => !view.hidden.has(d.cls))
@@ -230,9 +259,9 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
       layers: [
         new ColumnLayer<Layer>({
           id: 'boring-columns',
-          // 「地下に埋める」では地表の膜の下に差し込む(膜越しに見える)。beforeId は
+          // 全国の位置の点の手前(地表の膜と同じグループ)に差し込む。beforeId は
           // MapboxOverlay(interleaved)が読む設定で、ColumnLayer の型定義には無い
-          ...({ beforeId: view.mode === 'under' ? VEIL_LAYER_ID : undefined } as object),
+          ...({ beforeId: INSERT_BEFORE_ID } as object),
           data,
           diskResolution: 16,
           radius: view.radius,
@@ -254,6 +283,7 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
             getElevation: [view.exag],
           },
         }),
+        ...veilLayers(),
         ...ringLayers(xray),
       ],
     })
