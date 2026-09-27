@@ -955,3 +955,8 @@ body {
   font-weight: 700;
   color: var(--ink);
 }
+
+/* 画面内の件数(全国の件数はバッジに出す) */
+.count-note {
+  margin: 0 0 8px;
+}

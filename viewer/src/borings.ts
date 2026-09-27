@@ -17,7 +17,7 @@ import type { CircleLayerSpecification, Map as MapLibreMap, VectorSourceSpecific
 export const SOURCE_ID = 'borings'
 export const POINT_LAYER_ID = 'boring-points'
 
-const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
+export const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
   || new URL(`${import.meta.env.BASE_URL}data/japan.mlt.pmtiles`, location.href).href
 
 export function sourceSpec(): VectorSourceSpecification {
