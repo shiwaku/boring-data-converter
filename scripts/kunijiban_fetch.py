@@ -1,18 +1,22 @@
 """国土地盤情報検索サイト(KuniJiban)から、範囲内のボーリング柱状図 XML を取得する。
 
-使い方: python scripts/kunijiban_fetch.py <name> <west> <south> <east> <north>
+使い方: python scripts/kunijiban_fetch.py <name> [<west> <south> <east> <north>]
   例:   python scripts/kunijiban_fetch.py tokyo23 139.56 35.52 139.92 35.82
+        python scripts/kunijiban_fetch.py japan          (範囲を省くと全国)
 
-1. ビューアのマーカーAPI(ズーム13のタイル単位)で範囲内のボーリングIDを集める
-   -> data/kunijiban/<name>/borings.ndjson
-2. ID ごとに XML をダウンロードする(取得済みはスキップ。中断しても再実行で続きから)
-   -> data/kunijiban/<name>/xml/<id>.xml、XML が無い ID は missing.txt に記録
+1. ビューアの検索 API(search.php、1 ページ 30 件)で範囲内のボーリングを集める
+   -> data/kunijiban/<name>/borings.ndjson(ID・座標・調査名・XML の有無など)
+   全国は 223,689 件・7,457 ページ(2026-09 時点)。ページ単位で再開できる
+2. XML があるもの(boring_xml_url > 0)だけダウンロードする。取得済みはスキップし、中断しても
+   再実行で続きから。XML が無いものにはリクエストを送らない
+   -> data/kunijiban/<name>/xml/<id>.xml
+
+どちらもリクエストは既定で 4 件/秒以下(環境変数 KUNIJIBAN_RPS)。429 や 5xx が返ったら待ち時間を延ばして再試行する。
 
 利用規約: https://www.kunijiban.pwri.go.jp/jp/terms.html
 第三者に提供する場合は「国土地盤情報検索サイト(KuniJiban)の地盤情報」である旨を表示すること。
 """
 import json
-import math
 import os
 import sys
 import time
@@ -22,13 +26,15 @@ import requests
 from dpp_client import ROOT
 
 BASE = "https://www.kunijiban.pwri.go.jp/viewer/"
-Z = 13  # ビューアがマーカーを取得するズーム(SETUP.borings.markers.minZoom)
-RPS = float(os.getenv("KUNIJIBAN_RPS", "1"))
+# 国土交通データプラットフォームの公式クライアント(mlit-dpf-mcp)の既定と同じ 4 件/秒。
+# KuniJiban の応答は XML で 0.15〜0.2 秒、検索で 0.3 秒ほどなので、1 本ずつでこの上限に届く
+RPS = float(os.getenv("KUNIJIBAN_RPS", "4"))
+JAPAN = (122.0, 20.0, 154.0, 46.0)
 
-if len(sys.argv) != 6:
+if len(sys.argv) not in (2, 6):
     raise SystemExit(__doc__)
 name = sys.argv[1]
-west, south, east, north = map(float, sys.argv[2:])
+west, south, east, north = map(float, sys.argv[2:]) if len(sys.argv) == 6 else JAPAN
 OUT = ROOT / "data" / "kunijiban" / name
 (OUT / "xml").mkdir(parents=True, exist_ok=True)
 
@@ -58,50 +64,51 @@ def get(url, **params):
     raise RuntimeError(f"giving up: {url} {params}")
 
 
-def tile(lon, lat):
-    n = 2 ** Z
-    x = int((lon + 180) / 360 * n)
-    y = int((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n)
-    return x, y
-
-
-# 1. ID 一覧
+# 1. 検索 API で一覧を集める(ページ単位で追記し、最後に取れたページを state に残す)
 borings_path = OUT / "borings.ndjson"
-if not borings_path.exists():
-    x0, y0 = tile(west, north)
-    x1, y1 = tile(east, south)
-    tiles = [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]
-    borings = {}
-    for i, (x, y) in enumerate(tiles, 1):
-        values = get(BASE + "server/markers.php", x=x, y=y, z=Z).json()["data"]["values"]
-        for v in values:
-            if west <= float(v["longitude"]) <= east and south <= float(v["latitude"]) <= north:
-                borings[v["id"]] = v
-        print(f"tile {i}/{len(tiles)} z{Z}/{x}/{y}: {len(values)} 件 (累計 {len(borings):,})")
-    tmp = borings_path.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        for v in borings.values():
-            f.write(json.dumps(v, ensure_ascii=False) + "\n")
-    tmp.replace(borings_path)
-ids = [json.loads(line)["id"] for line in borings_path.open(encoding="utf-8")]
-print(f"ボーリング {len(ids):,} 件")
+state_path = OUT / "search.state.json"
+bbox = f"{north},{west},{south},{east}"  # search.php は 北,西,南,東
+if not borings_path.exists() or state_path.exists():
+    state = json.loads(state_path.read_text()) if state_path.exists() else {"page": 0}
+    if state["page"] == 0 and borings_path.exists():
+        borings_path.unlink()
+    page = state["page"] + 1
+    with borings_path.open("a", encoding="utf-8") as f:
+        while True:
+            data = get(BASE + "server/search.php", bbox=bbox, page=page).json()["data"]
+            for v in data["values"]:
+                f.write(json.dumps(v, ensure_ascii=False) + "\n")
+            f.flush()
+            state_path.write_text(json.dumps({"page": page, "pages": data["meta"]["pages"]}))
+            if page % 50 == 0 or page >= data["meta"]["pages"]:
+                print(f"search {page:,}/{data['meta']['pages']:,} ページ(全 {data['meta']['total']:,} 件)")
+            if page >= data["meta"]["pages"] or not data["values"]:
+                break
+            page += 1
+    state_path.unlink()
+
+borings = {}
+for line in borings_path.open(encoding="utf-8"):
+    v = json.loads(line)
+    borings[v["id"]] = v  # ページの境目で重複しても 1 件にする
+with_xml = [i for i, v in borings.items() if (v.get("boring_xml_url") or 0) > 0]
+print(f"ボーリング {len(borings):,} 件(XML あり {len(with_xml):,} 件)")
 
 # 2. XML
 missing_path = OUT / "missing.txt"
 missing = set(missing_path.read_text().split()) if missing_path.exists() else set()
-todo = [i for i in ids if not (OUT / "xml" / f"{i}.xml").exists() and str(i) not in missing]
-print(f"XML 取得対象 {len(todo):,} 件(取得済み・XMLなしを除く)")
+todo = [i for i in with_xml if not (OUT / "xml" / f"{i}.xml").exists() and str(i) not in missing]
+print(f"XML 取得対象 {len(todo):,} 件(取得済み・取得できなかったものを除く)")
 for n, bid in enumerate(todo, 1):
     r = get(BASE + "refer/", data="boring", type="xml", id=bid)
     if "xml" not in r.headers.get("Content-Type", ""):
-        # XML が無い ID は 200 + HTML のエラーページ(Error Code 404)が返る
-        missing.add(str(bid))
+        # フラグがあっても XML が返らないもの(200 + HTML のエラーページ)は記録だけする
         with missing_path.open("a") as f:
             f.write(f"{bid}\n")
     else:
         tmp = OUT / "xml" / f"{bid}.tmp"
         tmp.write_bytes(r.content)
         tmp.replace(OUT / "xml" / f"{bid}.xml")
-    if n % 50 == 0 or n == len(todo):
-        print(f"{n:,}/{len(todo):,} (XMLなし {len(missing):,})")
+    if n % 100 == 0 or n == len(todo):
+        print(f"xml {n:,}/{len(todo):,}")
 print(f"完了: {OUT}")
