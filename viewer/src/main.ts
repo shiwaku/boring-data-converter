@@ -4,13 +4,14 @@ import * as maplibregl from 'maplibre-gl'
 // 復号されない。?worker&url で別チャンクに吐かせて、その URL を渡す
 // (shiwaku/jma-earthquake-data-converter の viewer と同じ対処)。
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { Protocol } from 'pmtiles'
+import { PMTiles, Protocol } from 'pmtiles'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { BASEMAPS, getBasemapStyle, type Basemap } from './basemap'
 import {
   CLASSES,
   ELEV_OFFSET_M,
+  PMTILES_URL,
   POINT_LAYER_ID,
   SOURCE_ID,
   createBoringOverlay,
@@ -380,11 +381,26 @@ if (window.matchMedia('(hover: hover)').matches) {
   })
 }
 
-// 読み込み済みの件数(読み込んだタイルの分だけ)
-map.on('idle', () => {
-  const c = borings.count()
-  el('feature-count').textContent = c.borings ? `${c.borings.toLocaleString('ja-JP')}本` : '–'
-})
+// 件数: 画面内(読み込んだタイルの分)と全国の合計を並べる。画面内の数だけだと全国の本数に見えるため。
+// 全国の合計はタイルのメタデータ(tippecanoe の tilestats)から読む。データを更新しても数字がずれない
+let totalBorings: number | null = null
+new PMTiles(PMTILES_URL).getMetadata()
+  .then((meta) => {
+    const layers = (meta as { tilestats?: { layers?: { layer: string; count: number }[] } }).tilestats?.layers
+    totalBorings = layers?.find((l) => l.layer === 'borings')?.count ?? null
+    renderCount()
+  })
+  .catch(() => { /* 取れなければ画面内の数だけ出す */ })
+
+function renderCount(): void {
+  const fmt = (n: number): string => n.toLocaleString('ja-JP')
+  const badge = el('feature-count')
+  badge.textContent = totalBorings != null ? `全国 ${fmt(totalBorings)}本` : '–'
+  badge.title = 'KuniJiban から XML を取得できた孔の合計'
+  const inView = borings.count().borings
+  el('inview-count').textContent = inView ? `画面内に読み込んだ孔: ${fmt(inView)}本` : ''
+}
+map.on('idle', renderCount)
 
 // ---- 初期化 ----
 
