@@ -25,6 +25,17 @@ def test_v210():
     assert b.spts[0].depth_m == 4.15 and b.spts[0].n_value == 7
 
 
+def test_v110():
+    b = parse(FIX / "kunijiban_511179708_v1.10.xml")
+    assert b.dtd_version == "1.10"
+    assert b.elevation_m == 3.92
+    assert b.length_m == 20.45
+    assert len(b.layers) == 7
+    assert (b.layers[0].top_m, b.layers[0].bottom_m, b.layers[0].name) == (0.0, 0.8, "礫混じり砂質粘土（盛土）")
+    assert b.layers[0].symbol is None  # 1.10 には土質記号が無い
+    assert len(b.spts) == 9
+
+
 def test_v300():
     b = parse(FIX / "kunijiban_506957380_v3.00.xml")
     assert b.dtd_version == "3.00"
@@ -61,7 +72,7 @@ def test_cli(tmp_path):
     main([str(FIX), "-o", str(tmp_path / "out")])
     layers = [json.loads(line) for line in (tmp_path / "out.layers.ndjson").open(encoding="utf-8")]
     borings = [json.loads(line) for line in (tmp_path / "out.borings.ndjson").open(encoding="utf-8")]
-    assert len(borings) == 4
+    assert len(borings) == 5
     p = layers[0]["properties"]
     for key in ("top_depth_cm", "bottom_depth_cm", "thickness_cm", "top_elev_cm", "bottom_elev_cm"):
         assert isinstance(p[key], int)  # tippecanoe / mlt 向けに整数 cm
