@@ -92,7 +92,7 @@ export interface Layer {
   cls: number
 }
 
-export type HeightMode = 'under' | 'elev' | 'depth'
+export type HeightMode = 'under' | 'depth'
 
 export interface ViewState {
   mode: HeightMode
@@ -105,8 +105,6 @@ export interface ViewState {
   theme: 'light' | 'dark'
 }
 
-/** 「標高をそろえる」で地面(高さ 0)に置く標高 [m] */
-export const ELEV_OFFSET_M = 80
 /** 層の境目に空ける隙間(表示上の m) */
 const GAP_M = 0.4
 /**
@@ -181,17 +179,14 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
     return view.terrainExag != null ? ((collar.get(boringId) ?? 0) / 100) * view.terrainExag : 0
   }
 
-  /** 層の下端の表示高さ [m]。null なら描かない */
-  function baseZ(d: Layer): number | null {
+  /** 層の下端の表示高さ [m] */
+  function baseZ(d: Layer): number {
     const ground = groundZ(d.boring_id)
     if (view.mode === 'under') {
-      // 地下に表示: 孔口を地面に置き、実際の深さで下へ伸ばす
+      // 地下に埋める: 孔口を地面に置き、実際の深さで下へ伸ばす
       return ground - (d.bottom_depth_cm / 100) * view.exag
     }
-    if (view.mode === 'elev') {
-      return d.bottom_elev_cm == null ? null : (d.bottom_elev_cm / 100 + ELEV_OFFSET_M) * view.exag
-    }
-    // 各孔の地表をそろえる: 最深部を地面に置いて上に積む。3D地形があれば孔口標高の地面に立てる
+    // 地上に立てる: 最深部を地面に置いて上に積む。3D地形があれば孔口標高の地面に立てる
     return ground + ((maxDepth.get(d.boring_id)! - d.bottom_depth_cm) / 100) * view.exag
   }
 
@@ -224,7 +219,7 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
 
   function render(): void {
     const xray = view.mode === 'under' && view.terrainExag != null
-    const data = [...cache.values()].filter((d) => !view.hidden.has(d.cls) && baseZ(d) != null)
+    const data = [...cache.values()].filter((d) => !view.hidden.has(d.cls))
     overlay.setProps({
       layers: [
         new ColumnLayer<Layer>({
@@ -242,7 +237,7 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
           parameters: { depthCompare: xray ? 'always' : 'less-equal' },
           // 透かして見ている(地面の下にある)ことが分かるよう、少し薄くする
           opacity: xray ? 0.7 : 1,
-          getPosition: (d) => [d.lng, d.lat, baseZ(d)!],
+          getPosition: (d) => [d.lng, d.lat, baseZ(d)],
           getElevation: (d) => Math.max((d.thickness_cm / 100) * view.exag - GAP_M, 0.1),
           getFillColor: (d) => RGB[d.cls],
           updateTriggers: {
