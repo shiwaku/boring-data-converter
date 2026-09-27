@@ -5,7 +5,7 @@
 
 > 開発中です。取得・変換・タイル化・3D ビューワが動きます(東京 23 区周辺で検証中)。
 
-- デモ: <https://shiwaku.github.io/boring-data-converter/>(東京 23 区周辺のボーリング 3,104 本)
+- デモ: <https://shiwaku.github.io/boring-data-converter/>(全国のボーリング 202,573 本、位置のみは 262,284 件)
 - 検討メモ: [docs/design-memo.md](docs/design-memo.md)
 
 ## 構成
@@ -90,6 +90,7 @@ XML ファイルまたはディレクトリ(再帰的に `*.xml` を探す)を�
 
 | 版 | 土質層のタグ | 確認状況 |
 | --- | --- | --- |
+| 1.10 | `地質区分`(`_深度` が下端深度、土質記号なし) | 確認済み(全国に 878 本。2.10 と宣言した 4 本にもある) |
 | 2.x | `土質岩種区分` | 2.10 で確認 |
 | 3.00 | `岩石土区分` | 確認済み |
 | 4.00 | `工学的地質区分名現場土質名`(総掘進長は `総削孔長`) | 確認済み |
@@ -109,7 +110,8 @@ bash scripts/build_tiles.sh build/tokyo23 tokyo23
 タイル内のレイヤーは `layers`(土質層)、`spt`(標準貫入試験)、`borings`(孔口)で、ズームは 8〜14 です。
 
 - 1 本のボーリングは同じ座標に層の数だけ点が重なるため、間引くと柱の途中が欠けます。`-r1 --no-feature-limit --no-tile-size-limit` で間引きを止め、`--buffer=0` で隣のタイルへの重複を避けています。
-- 東京 23 区周辺 3,104 本(土質層 37,490、標準貫入試験 76,741)で、MVT 7.9 MB → MLT 3.3 MB。全ズームで地物数が入力と一致することを確認しています。
+- 全国 202,573 本(土質層 1,636,553、標準貫入試験 2,846,469)で、MVT 394 MB → MLT 183 MB。全国分はリポジトリに置かず R2(`https://shi-works.com/pmtiles/boring-data-converter/japan.mlt.pmtiles`)から配信します。
+- 東京 23 区周辺 3,104 本では MVT 7.9 MB → MLT 3.3 MB(`viewer/public/data/tokyo23.mlt.pmtiles`、開発用に同梱)。
 
 ### 全国のボーリング位置(DPP)
 

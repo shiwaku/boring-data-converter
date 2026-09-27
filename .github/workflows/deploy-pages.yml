@@ -41,6 +41,8 @@ jobs:
         env:
           # 全国のボーリング位置(DPP)のタイルは R2 から配信する(#18)
           VITE_DPP_PMTILES_URL: https://shi-works.com/pmtiles/boring-data-converter/japan-dpp-points.mlt.pmtiles
+          # 柱状図(KuniJiban 全国 202,573 本)のタイルも R2 から配信する
+          VITE_PMTILES_URL: https://shi-works.com/pmtiles/boring-data-converter/japan.mlt.pmtiles
 
       - uses: actions/configure-pages@v5
 

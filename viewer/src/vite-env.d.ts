@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** 土質層 PMTiles(MLT)の配信先を差し替える(既定は data/tokyo23.mlt.pmtiles) */
+  /** 土質層 PMTiles(MLT)の配信先を差し替える(既定は data/japan.mlt.pmtiles。全国分は R2 から配信する) */
   readonly VITE_PMTILES_URL?: string
   /** 全国のボーリング位置(DPP)の PMTiles(MLT)の配信先(既定は data/japan-dpp-points.mlt.pmtiles) */
   readonly VITE_DPP_PMTILES_URL?: string

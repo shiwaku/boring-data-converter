@@ -18,7 +18,7 @@ export const SOURCE_ID = 'borings'
 export const POINT_LAYER_ID = 'boring-points'
 
 const PMTILES_URL = import.meta.env.VITE_PMTILES_URL
-  || new URL(`${import.meta.env.BASE_URL}data/tokyo23.mlt.pmtiles`, location.href).href
+  || new URL(`${import.meta.env.BASE_URL}data/japan.mlt.pmtiles`, location.href).href
 
 export function sourceSpec(): VectorSourceSpecification {
   return {
