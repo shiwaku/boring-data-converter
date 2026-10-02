@@ -1,8 +1,12 @@
 """国土地盤情報検索サイト(KuniJiban)から、範囲内のボーリング柱状図 XML を取得する。
 
-使い方: python scripts/kunijiban_fetch.py <name> [<west> <south> <east> <north>]
+使い方: python scripts/kunijiban_fetch.py <name> <west> <south> <east> <north>
+        python scripts/kunijiban_fetch.py <name> --all-japan
   例:   python scripts/kunijiban_fetch.py tokyo23 139.56 35.52 139.92 35.82
-        python scripts/kunijiban_fetch.py japan          (範囲を省くと全国)
+
+全国の取得は約 21 万リクエストになり、KuniJiban に大きな負荷がかかる。変換済みの全国分は
+タイルで公開しているので(README「変換済みのデータ」)、まずそちらを使うこと。
+どうしても全国分が要るときだけ --all-japan を付ける。
 
 1. ビューアの検索 API(search.php、1 ページ 30 件)で範囲内のボーリングを集める
    -> data/kunijiban/<name>/borings.ndjson(ID・座標・調査名・XML の有無など)
@@ -11,7 +15,7 @@
    再実行で続きから。XML が無いものにはリクエストを送らない
    -> data/kunijiban/<name>/xml/<id>.xml
 
-どちらもリクエストは既定で 4 件/秒以下(環境変数 KUNIJIBAN_RPS)。429 や 5xx が返ったら待ち時間を延ばして再試行する。
+どちらもリクエストは既定で 1 件/秒以下(環境変数 KUNIJIBAN_RPS)。429 や 5xx が返ったら待ち時間を延ばして再試行する。
 
 利用規約: https://www.kunijiban.pwri.go.jp/jp/terms.html
 第三者に提供する場合は「国土地盤情報検索サイト(KuniJiban)の地盤情報」である旨を表示すること。
@@ -26,20 +30,23 @@ import requests
 from dpp_client import ROOT
 
 BASE = "https://www.kunijiban.pwri.go.jp/viewer/"
-# 国土交通データプラットフォームの公式クライアント(mlit-dpf-mcp)の既定と同じ 4 件/秒。
-# KuniJiban の応答は XML で 0.15〜0.2 秒、検索で 0.3 秒ほどなので、1 本ずつでこの上限に届く
-RPS = float(os.getenv("KUNIJIBAN_RPS", "4"))
+# 大量取得でアクセスを止められた事例があるため、1 件/秒に抑える(#34)
+RPS = float(os.getenv("KUNIJIBAN_RPS", "1"))
 JAPAN = (122.0, 20.0, 154.0, 46.0)
 
-if len(sys.argv) not in (2, 6):
+if len(sys.argv) == 6:
+    west, south, east, north = map(float, sys.argv[2:])
+elif len(sys.argv) == 3 and sys.argv[2] == "--all-japan":
+    west, south, east, north = JAPAN
+else:
     raise SystemExit(__doc__)
 name = sys.argv[1]
-west, south, east, north = map(float, sys.argv[2:]) if len(sys.argv) == 6 else JAPAN
 OUT = ROOT / "data" / "kunijiban" / name
 (OUT / "xml").mkdir(parents=True, exist_ok=True)
 
 session = requests.Session()
-session.headers["User-Agent"] = "boring-data-converter/0.1"
+# 先方が問い合わせ先を分かるように、リポジトリの URL を入れる
+session.headers["User-Agent"] = "boring-data-converter/0.1 (+https://github.com/shiwaku/boring-data-converter)"
 _last = 0.0
 
 
