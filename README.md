@@ -155,16 +155,21 @@ npm run build    # 型チェック → ../app/ へビルド
 
 [国土地盤情報検索サイト KuniJiban](https://www.kunijiban.pwri.go.jp/) から、範囲内のボーリング柱状図 XML を取得します。
 
+> [!IMPORTANT]
+> **大量の取得は避けてください。** KuniJiban から XML を大量に取得したサイトが、アクセスを止められた事例があります。
+> 全国分は取得・変換済みで、タイルとして公開しています([変換済みのデータ](#変換済みのデータ))。全国の柱状図を見たい・使いたいだけなら、まずそちらを使ってください。
+> 自分で取得するときは、必要な範囲に絞ってください。
+
 ```sh
 # 名前と範囲(西 南 東 北)を指定。data/kunijiban/<name>/ に保存
 python scripts/kunijiban_fetch.py tokyo23 139.56 35.52 139.92 35.82
-# 範囲を省くと全国
-python scripts/kunijiban_fetch.py japan
+# 全国(約 21 万リクエスト。1 件/秒で 2 日半ほど)は --all-japan を明示したときだけ取得する
+python scripts/kunijiban_fetch.py japan --all-japan
 ```
 
 ビューアの検索 API(`search.php`、1 ページ 30 件)で ID・座標・調査名・XML の有無を集め、XML があるものだけをダウンロードします。
 全国は 223,689 件・7,457 ページです(2026 年 9 月時点)。一覧はページ単位、XML はファイル単位で、中断しても再実行で続きから取得します。
-リクエストは既定 4 件/秒以下です(環境変数 `KUNIJIBAN_RPS`)。国土交通データプラットフォームの公式クライアント([mlit-dpf-mcp](https://github.com/MLIT-DATA-PLATFORM/mlit-dpf-mcp))の既定に合わせています。429 や 5xx が返ったら待ち時間を延ばして再試行します。
+リクエストは既定 1 件/秒以下です(環境変数 `KUNIJIBAN_RPS`。上げないでください)。User-Agent にはこのリポジトリの URL を入れています。429 や 5xx が返ったら待ち時間を延ばして再試行します。
 
 ### 国土交通データプラットフォーム(メタデータ)
 
@@ -178,11 +183,22 @@ python scripts/02_fetch_metadata.py ngi   # 全件を data/metadata_ngi.ndjson �
 
 DPP のメタデータにある XML の URL は国土地盤情報センター(`publicweb.ngic.or.jp`)を指していますが、2026 年 9 月時点でアクセスできない(HTTP 403)ため、XML の取得には KuniJiban を使っています。
 
+## 変換済みのデータ
+
+全国分を変換したタイル(PMTiles、MLT 形式)を公開しています。デモのビューワもこれを読んでいます。
+
+| データ | URL |
+| --- | --- |
+| 柱状図の土質層(KuniJiban、202,573 本) | <https://shi-works.com/pmtiles/boring-data-converter/japan.mlt.pmtiles> |
+| 全国のボーリング位置(DPP、262,284 件) | <https://shi-works.com/pmtiles/boring-data-converter/japan-dpp-points.mlt.pmtiles> |
+
+柱状図のタイルのレイヤーは `layers`(土質層)、`spt`(標準貫入試験)、`borings`(孔口)で、属性は[変換の出力](#出力)の項目です([タイル化](#タイル化))。使うときは、下の「データの出典」のとおり出典を表示してください(KuniJiban の利用規約では、出典を表示すれば加工・再配布できます)。
+
 ## データの出典
 
 | 用途 | データ | 提供元 | 備考 |
 | --- | --- | --- | --- |
-| 土質層タイル(`viewer/public/data/`) | 国土地盤情報検索サイト「KuniJiban」のボーリング柱状図 XML(東京 23 区周辺) | 国土交通省、国立研究開発法人土木研究所、国立研究開発法人港湾空港技術研究所 | [KuniJiban 利用規約](https://www.kunijiban.pwri.go.jp/jp/terms.html)に基づき加工・頒布 |
+| 土質層タイル(`viewer/public/data/`) | 国土地盤情報検索サイト「KuniJiban」のボーリング柱状図 XML(全国 202,573 本) | 国土交通省、国立研究開発法人土木研究所、国立研究開発法人港湾空港技術研究所 | [KuniJiban 利用規約](https://www.kunijiban.pwri.go.jp/jp/terms.html)に基づき加工・頒布 |
 | サンプル XML(`tests/fixtures/`) | 国土地盤情報検索サイト「KuniJiban」のボーリング柱状図 XML(ID 149789321、243720635、506957380、508177590) | 国土交通省、国立研究開発法人土木研究所、国立研究開発法人港湾空港技術研究所 | [KuniJiban 利用規約](https://www.kunijiban.pwri.go.jp/jp/terms.html)に基づき複製・頒布 |
 | メタデータ | 国土交通データプラットフォーム 国土地盤情報データベース | 国土交通省 | 原則 CC BY 4.0(データ提供者の利活用ルールが優先) |
 | 地形 | [Mapterhorn](https://mapterhorn.com/) 全球地形タイル | Mapterhorn | [attribution](https://mapterhorn.com/attribution) |
