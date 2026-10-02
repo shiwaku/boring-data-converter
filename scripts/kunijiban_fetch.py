@@ -15,7 +15,7 @@
    再実行で続きから。XML が無いものにはリクエストを送らない
    -> data/kunijiban/<name>/xml/<id>.xml
 
-どちらもリクエストは既定で 1 件/秒以下(環境変数 KUNIJIBAN_RPS)。429 や 5xx が返ったら待ち時間を延ばして再試行する。
+どちらもリクエストは既定で 4 件/秒以下(環境変数 KUNIJIBAN_RPS)。429 や 5xx が返ったら待ち時間を延ばして再試行する。
 
 利用規約: https://www.kunijiban.pwri.go.jp/jp/terms.html
 第三者に提供する場合は「国土地盤情報検索サイト(KuniJiban)の地盤情報」である旨を表示すること。
@@ -30,8 +30,9 @@ import requests
 from dpp_client import ROOT
 
 BASE = "https://www.kunijiban.pwri.go.jp/viewer/"
-# 大量取得でアクセスを止められた事例があるため、1 件/秒に抑える(#34)
-RPS = float(os.getenv("KUNIJIBAN_RPS", "1"))
+# 国土交通データプラットフォームの公式クライアント(mlit-dpf-mcp)の既定と同じ 4 件/秒。
+# KuniJiban の応答は XML で 0.15〜0.2 秒、検索で 0.3 秒ほどなので、1 本ずつでこの上限に届く
+RPS = float(os.getenv("KUNIJIBAN_RPS", "4"))
 JAPAN = (122.0, 20.0, 154.0, 46.0)
 
 if len(sys.argv) == 6:
