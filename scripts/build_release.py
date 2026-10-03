@@ -23,6 +23,7 @@ from pathlib import Path
 from string import Template
 
 import geopandas as gpd
+import pyarrow.parquet as pq
 
 from dpp_client import ROOT
 
@@ -44,6 +45,17 @@ def read_ndjson(path):
         if s.dtype.kind == "f" and (s.dropna() % 1 == 0).all():
             g[col] = s.astype("Int64" if s.abs().max() >= 2**31 else "Int32")
     return g
+
+
+def write_geoparquet(g, path):
+    g.to_parquet(path, compression="zstd", schema_version="1.1.0", write_covering_bbox=False)
+    # geopandas は geometry 列に Arrow の拡張型 geoarrow.wkb を付け、その中に CRS を PROJJSON の文字列で入れる。
+    # GDAL 3.12(QGIS 4.0 に同梱)はこちらを優先して読み、CRS を読めずに「不明」にする(3.9 と 3.13 は読める)。
+    # GeoParquet の CRS はファイルの geo メタデータにあるので、列の拡張型は外す
+    t = pq.read_table(path)
+    i = t.schema.get_field_index("geometry")
+    t = t.set_column(i, t.schema.field(i).remove_metadata(), t.column(i))
+    pq.write_table(t, path, compression="zstd")
 
 
 def count_lines(path):
@@ -95,7 +107,7 @@ def main():
             if g["code"].isna().any():
                 raise SystemExit(f"code が見つからない孔がある: {g.loc[g['code'].isna(), 'boring_id'].head().tolist()}")
         g = g.sort_values(keys, kind="stable").reset_index(drop=True)
-        g.to_parquet(out / name, compression="zstd", schema_version="1.1.0", write_covering_bbox=False)
+        write_geoparquet(g, out / name)
         counts[name] = len(g)
         print(f"{name}: {len(g):,} 件、{(out / name).stat().st_size / 1e6:.1f} MB")
 
