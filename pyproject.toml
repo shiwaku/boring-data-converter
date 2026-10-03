@@ -11,6 +11,8 @@ dependencies = ["lxml"]
 # scripts/ の DPP 一括取得用
 fetch = ["requests"]
 dev = ["pytest"]
+# scripts/build_release.py(GeoParquet の作成。#42)
+release = ["geopandas", "pyarrow", "pyogrio"]
 
 [build-system]
 requires = ["hatchling"]
