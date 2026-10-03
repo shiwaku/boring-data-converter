@@ -53,6 +53,8 @@ def main():
                 "soil_names": soil_names(m.get("NGI:rocksoil_names")),
                 "year": int(m["DPF:year"]) if str(m.get("DPF:year") or "").isdigit() else None,
                 "prefecture": first(m.get("DPF:prefecture_name")),
+                # 元データの出どころ(KuniJiban、KuniJiban(港湾)、自治体名など。NGIC に登録されたものは空)
+                "source_name": (m.get("NGI:source_name") or "").strip() or None,
                 # XML の有無(NGIC の XML は 2026-09 時点で取得できない。#5)
                 "has_xml": 1 if m.get("NGI:link_boring_xml") else 0,
             }

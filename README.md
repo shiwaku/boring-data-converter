@@ -185,7 +185,18 @@ DPP のメタデータにある XML の URL は国土地盤情報センター(`p
 
 ## 変換済みのデータ
 
-全国分を変換したタイル(PMTiles、MLT 形式)を公開しています。デモのビューワもこれを読んでいます。
+全国分を変換したデータを、2 つの形で公開しています。
+
+- **GitHub リリース**(取得日ごとの版。中身は変えない): [Releases](https://github.com/shiwaku/boring-data-converter/releases) に、孔口・土質層・標準貫入試験・全国の位置の GeoParquet と、PMTiles を付けています。分析にはこちらを使ってください。
+- **R2 の PMTiles**(最新版の配信): 下の URL から、地図で必要な範囲だけ読めます。デモのビューワもこれを読んでいます。
+
+リリースのファイルは `scripts/build_release.py` で作ります(`pip install -e ".[release]"` が必要)。
+
+```sh
+python scripts/build_release.py data-2026.09 --kunijiban-date 2026-09-27 --dpp-date 2026-09-26   # → dist/data-2026.09/
+```
+
+同梱する README のひな形は [docs/release-README.md](docs/release-README.md) です(出典・利用条件の文面もここで管理しています)。
 
 | データ | URL |
 | --- | --- |

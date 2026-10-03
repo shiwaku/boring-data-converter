@@ -6,6 +6,8 @@ apikey.txt
 /data/
 /explore/
 /build/
+# リリースに付けるファイル(scripts/build_release.py の出力)
+/dist/
 
 # Python
 __pycache__/
