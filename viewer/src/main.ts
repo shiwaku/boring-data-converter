@@ -20,6 +20,7 @@ import {
   type Layer,
   type ViewState,
 } from './borings'
+import { logSvg, nRange, supportDepthCm } from './log'
 import { DPP_LAYER_ID, DPP_SOURCE_ID, dppLayer, dppPopupHtml, dppSourceSpec } from './dpp'
 import { DEM_HILLSHADE, DEM_TERRAIN, HILLSHADE_ID, demSourceSpec, hillshadeLayer } from './terrain'
 import { applyThemeAttr, initialTheme, type Theme } from './theme'
@@ -339,19 +340,36 @@ const esc = (s: unknown): string =>
 const m = (cm: number | undefined): string => (cm == null ? '–' : (cm / 100).toFixed(2))
 
 function popupHtml(hit: Layer): string {
-  const rows = borings.column(hit.boring_id).map((d) => {
-    const c = CLASSES.find((_, i) => i === d.cls)!
+  const layers = borings.column(hit.boring_id)
+  const spts = borings.spts(hit.boring_id)
+  const info = borings.info(hit.boring_id)
+  const support = supportDepthCm(spts)
+  const hasN = spts.some((s) => s.n_value != null)
+  const rows = layers.map((d) => {
+    const c = CLASSES[d.cls]
     const cur = d.key === hit.key ? ' class="pop-cur"' : ''
     return `<tr${cur}><td>${m(d.top_depth_cm)}〜${m(d.bottom_depth_cm)}</td>` +
-      `<td><span class="sw" style="background:${c.color}"></span>${esc(d.soil_name ?? '(土質名なし)')}</td></tr>`
+      `<td><span class="sw" style="background:${c.color}"></span>${esc(d.soil_name ?? '(土質名なし)')}</td>` +
+      (hasN ? `<td class="pop-n">${nRange(d, spts)}</td>` : '') + '</tr>'
   })
-  const collarCm = hit.top_elev_cm != null ? hit.top_elev_cm + hit.top_depth_cm : undefined
+  const collarCm = info?.elevation_cm ?? (hit.top_elev_cm != null ? hit.top_elev_cm + hit.top_depth_cm : undefined)
+  const facts = [
+    ['調査名', esc(info?.survey_name)],
+    ['ボーリング名', esc(info?.name)],
+    ['孔口標高', collarCm != null ? `T.P. ${m(collarCm)} m` : ''],
+    ['掘進長', info?.length_cm != null ? `${m(info.length_cm)} m` : ''],
+    ['孔内水位', info?.water_level_cm != null ? `孔口から ${m(info.water_level_cm)} m` : ''],
+    // 試験が無い孔では判定できないので行ごと出さない
+    ['N≥50 が 5 m 続く深さ', !hasN ? '' : support != null ? `${m(support)} m` : '掘進長の範囲に無し'],
+  ].filter(([, v]) => v)
   const pdf = `https://www.kunijiban.pwri.go.jp/viewer/refer/?data=boring&type=view&id=${encodeURIComponent(hit.boring_id)}`
-  return `<div class="pop">
+  return `<div class="pop pop-boring">
     <div class="pop-head">ボーリング ${esc(hit.boring_id)}</div>
     <div class="pop-body">
-      <p class="pop-note">孔口標高 T.P. ${m(collarCm)} m</p>
-      <table class="pop-tbl pop-column"><thead><tr><th>深度 (m)</th><th>土質</th></tr></thead><tbody>${rows.join('')}</tbody></table>
+      <table class="pop-tbl"><tbody>${facts.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</tbody></table>
+      ${logSvg(layers, spts, info?.water_level_cm, support)}
+      <p class="pop-note">● N 値(50 超は ▶)。▽ 孔内水位、破線は N≥50 が 5 m 続く深さ(支持層の目安で、設計上の判定ではない)</p>
+      <table class="pop-tbl pop-column"><thead><tr><th>深度 (m)</th><th>土質</th>${hasN ? '<th class="pop-n">N 値</th>' : ''}</tr></thead><tbody>${rows.join('')}</tbody></table>
     </div>
     <div class="pop-foot"><a href="${pdf}" target="_blank" rel="noopener">柱状図(PDF)を KuniJiban で開く</a></div>
   </div>`

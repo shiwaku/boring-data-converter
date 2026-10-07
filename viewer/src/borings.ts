@@ -97,6 +97,23 @@ export interface Layer {
   cls: number
 }
 
+/** 標準貫入試験 1 回(深度は cm) */
+export interface Spt {
+  depth_cm: number
+  blows?: number
+  penetration_cm?: number
+  n_value?: number
+}
+
+/** ボーリング 1 本の属性(borings レイヤー) */
+export interface BoringInfo {
+  name?: string
+  survey_name?: string
+  elevation_cm?: number
+  length_cm?: number
+  water_level_cm?: number
+}
+
 export type HeightMode = 'under' | 'depth'
 
 export interface ViewState {
@@ -133,6 +150,10 @@ export interface BoringOverlay {
   pick(x: number, y: number): Layer | null
   /** 同じボーリングの層(上から順) */
   column(boringId: string): Layer[]
+  /** 同じボーリングの標準貫入試験(浅い順)。読み込まれているタイルから拾う */
+  spts(boringId: string): Spt[]
+  /** ボーリングの属性。読み込まれているタイルに無ければ null */
+  info(boringId: string): BoringInfo | null
   count(): { borings: number; layers: number }
 }
 
@@ -303,6 +324,19 @@ export function createBoringOverlay(map: MapLibreMap, view: ViewState): BoringOv
     },
     column(boringId) {
       return [...cache.values()].filter((d) => d.boring_id === boringId).sort((a, b) => a.layer_index - b.layer_index)
+    },
+    spts(boringId) {
+      // 親子のズームのタイルが同時に読み込まれていると同じ試験が重複して返るので、深度でまとめる
+      const byDepth = new Map<number, Spt>()
+      for (const f of map.querySourceFeatures(SOURCE_ID, { sourceLayer: 'spt', filter: ['==', ['get', 'boring_id'], boringId] })) {
+        const p = f.properties as Spt
+        if (typeof p.depth_cm === 'number') byDepth.set(p.depth_cm, p)
+      }
+      return [...byDepth.values()].sort((a, b) => a.depth_cm - b.depth_cm)
+    },
+    info(boringId) {
+      const f = map.querySourceFeatures(SOURCE_ID, { sourceLayer: 'borings', filter: ['==', ['get', 'boring_id'], boringId] })[0]
+      return (f?.properties as BoringInfo | undefined) ?? null
     },
     count: () => ({ borings: maxDepth.size, layers: cache.size }),
   }
