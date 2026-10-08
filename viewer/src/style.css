@@ -967,14 +967,11 @@ body {
 }
 
 /* ---- ポップアップの簡易柱状図(土質の帯と N 値) ---- */
-.pop-boring {
-  max-height: min(560px, 70vh);
-  overflow-y: auto;
-}
-
+/* スクロールは本文だけで受け持ち、フッターのリンクは外に出す。ポップアップ全体を
+   スクロールさせると、開いたときに MapLibre が最初のリンク(フッター)にフォーカスを移し、
+   一番下までスクロールした状態で開いてしまう */
 .pop-boring .pop-body {
-  max-height: none;
-  overflow-y: visible;
+  max-height: min(460px, 60vh);
 }
 
 .pop-boring .pop-tbl th {
