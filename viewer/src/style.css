@@ -965,3 +965,75 @@ body {
 .slider-row[hidden] {
   display: none;
 }
+
+/* ---- ポップアップの簡易柱状図(土質の帯と N 値) ---- */
+/* スクロールは本文だけで受け持ち、フッターのリンクは外に出す。ポップアップ全体を
+   スクロールさせると、開いたときに MapLibre が最初のリンク(フッター)にフォーカスを移し、
+   一番下までスクロールした状態で開いてしまう */
+.pop-boring .pop-body {
+  max-height: min(460px, 60vh);
+}
+
+.pop-boring .pop-tbl th {
+  width: 45%;
+}
+
+.pop-column th,
+.pop-column td.pop-n,
+.pop-column th.pop-n {
+  width: auto;
+}
+
+.pop-column .pop-n {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.lg {
+  display: block;
+  padding: 6px 0 0;
+}
+
+.lg-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.lg-tick {
+  fill: var(--ink-3);
+  font-size: 9px;
+}
+
+.lg-frame {
+  fill: none;
+  stroke: var(--line-2);
+}
+
+.lg-n-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+
+.lg-n-dot,
+.lg-n-over {
+  fill: var(--accent);
+}
+
+.lg-water {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.lg-water-mark {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+
+.lg-support {
+  stroke: var(--ink-2);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
